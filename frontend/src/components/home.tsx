@@ -6,32 +6,44 @@ import SearchPanel from "./search-panel";
 import RouteControls from "./route-controls";
 import LayerToggle from "./layer-toggle";
 import RouteInfoPanel from "./route-info-panel";
+import SOSBlock from "./sos";
+import SafetyReportBlock from "./safety-report";
 
 const MapView = dynamic(() => import("./map-view"), { ssr: false });
+
+type TabKey = "search" | "route" | "layers" | "info" | "sos" | "report";
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Mobile bottom sheet state
-  const [activeTab, setActiveTab] = useState<"search" | "route" | "layers" | "info">("search");
+  const [activeTab, setActiveTab] = useState<TabKey>("search");
   const [sheetOpen, setSheetOpen] = useState(true);
 
-  const mobileTabs = [
+  const mobileTabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     {
-      key: "search" as const, label: "Route",
+      key: "search", label: "Route",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2.2"/><path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg>,
     },
     {
-      key: "route" as const, label: "Prefer",
+      key: "route", label: "Prefer",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg>,
     },
     {
-      key: "layers" as const, label: "Layers",
+      key: "layers", label: "Layers",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
     },
     {
-      key: "info" as const, label: "Info",
+      key: "info", label: "Info",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.2"/><path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>,
+    },
+    {
+      key: "sos", label: "SOS",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13 1 .37 1.98.72 2.91a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.93.35 1.9.59 2.91.72A2 2 0 0122 16.92z" fill="currentColor"/></svg>,
+    },
+    {
+      key: "report", label: "Report",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
     },
   ];
 
@@ -59,10 +71,14 @@ export default function Home() {
           flex-direction: row;
           align-items: stretch;
           pointer-events: none;
-          background: white; /* ensure collapsed area stays white */
+          background: transparent;
+          transition: background 0.50s ease;  
         }
 
-        /* The collapse toggle tab on the left edge of sidebar */
+        .lp-sidebar.open {
+            background: white;
+        }
+
         .lp-sidebar-toggle {
           pointer-events: auto;
           align-self: center;
@@ -82,7 +98,6 @@ export default function Home() {
         }
         .lp-sidebar-toggle:hover { background: #fff0f5; }
 
-        /* The scrollable panel column */
         .lp-sidebar-panels {
           pointer-events: auto;
           width: 250px;
@@ -103,7 +118,7 @@ export default function Home() {
           padding-left: 0;
           padding-right: 0;
           pointer-events: none;
-          transform: translateX(100%); /* slide completely offscreen */
+          transform: translateX(100%);
         }
 
         /* ─── Mobile ─── */
@@ -135,21 +150,30 @@ export default function Home() {
           }
           .lp-tab-bar {
             display: flex;
+            justify-content: space-between;
             border-bottom: 1.5px solid #f3f3f3;
-            padding: 0 12px;
+            padding: 0 8px;
+            overflow-x: auto;
+            scrollbar-width: none;
           }
+          .lp-tab-bar::-webkit-scrollbar { display: none; }
           .lp-tab {
-            flex: 1; display: flex; flex-direction: column;
+            flex-shrink: 0;
+            display: flex; flex-direction: column;
             align-items: center; gap: 3px;
-            padding: 7px 4px 9px;
+            padding: 7px 10px 9px;
             background: none; border: none;
             border-bottom: 2.5px solid transparent;
             cursor: pointer; font-family: inherit;
             font-size: 0.58rem; font-weight: 800;
             letter-spacing: 0.05em; text-transform: uppercase;
             color: #bbb; transition: color 0.15s, border-color 0.15s;
+            white-space: nowrap;
           }
           .lp-tab.active { color: #FF1A6C; border-bottom-color: #FF1A6C; }
+          /* SOS tab always tinted red even when inactive */
+          .lp-tab.sos-tab { color: #FF1A6C; opacity: 0.6; }
+          .lp-tab.sos-tab.active { opacity: 1; }
           .lp-sheet-content {
             padding: 14px 14px 32px;
             overflow-y: auto;
@@ -201,20 +225,43 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={{
-          display: "flex", alignItems: "center", gap: "8px",
-          background: "linear-gradient(135deg, #FF6BA8, #FF1A6C)",
-          borderRadius: "20px", padding: "5px 13px 5px 7px",
-          boxShadow: "0 3px 12px rgba(255,26,108,0.3)",
-        }}>
-          <div style={{ width: "25px", height: "25px", borderRadius: "50%", background: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="8" r="4" fill="#FF1A6C"/>
-              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="#FF6BA8"/>
-            </svg>
-          </div>
-          <span style={{ color: "white", fontWeight: "800", fontSize: "0.8rem" }}>You</span>
-        </div>
+        {/* Header right: SOS quick-pill */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {/* SOS chip */}
+            <div
+            onClick={() => { setActiveTab("sos"); setSheetOpen(true); }}
+            style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "linear-gradient(135deg, #FF6BA8, #FF1A6C)",
+                borderRadius: "20px",
+                padding: "5px 13px 5px 7px",
+                boxShadow: "0 3px 12px rgba(255,26,108,0.3)",
+                cursor: "pointer",
+            }}
+            >
+                <div
+                    style={{
+                    width: "25px",
+                    height: "25px",
+                    borderRadius: "50%",
+                    background: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    }}
+                >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13 1 .37 1.98.72 2.91a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.93.35 1.9.59 2.91.72A2 2 0 0122 16.92z" fill="#FF1A6C"/>
+                    </svg>
+                </div>
+
+                <span style={{ color: "white", fontWeight: "800", fontSize: "0.8rem" }}>
+                    SOS
+                </span>
+                </div>
+            </div>
       </div>
 
       {/* ── Desktop: Search panel top-left ── */}
@@ -223,7 +270,7 @@ export default function Home() {
       </div>
 
       {/* ── Desktop: Right collapsible sidebar ── */}
-      <div className="lp-sidebar">
+      <div className={`lp-sidebar ${sidebarOpen ? "open" : ""}`}>
         {/* Collapse toggle tab */}
         <button
           className="lp-sidebar-toggle"
@@ -243,6 +290,10 @@ export default function Home() {
           <RouteControls />
           <LayerToggle />
           <RouteInfoPanel />
+          {/* Divider */}
+          <div style={{ height: "1px", background: "rgba(255,26,108,0.12)", margin: "2px 0" }} />
+          <SOSBlock />
+          <SafetyReportBlock />
         </div>
       </div>
 
@@ -255,7 +306,7 @@ export default function Home() {
           {mobileTabs.map((t) => (
             <button
               key={t.key}
-              className={`lp-tab${activeTab === t.key ? " active" : ""}`}
+              className={`lp-tab${activeTab === t.key ? " active" : ""}${t.key === "sos" ? " sos-tab" : ""}`}
               onClick={() => { setActiveTab(t.key); setSheetOpen(true); }}
             >
               {t.icon}
@@ -264,10 +315,12 @@ export default function Home() {
           ))}
         </div>
         <div className="lp-sheet-content">
-          {activeTab === "search"  && <SearchPanel />}
-          {activeTab === "route"   && <RouteControls />}
-          {activeTab === "layers"  && <LayerToggle />}
-          {activeTab === "info"    && <RouteInfoPanel />}
+          {activeTab === "search" && <SearchPanel />}
+          {activeTab === "route"  && <RouteControls />}
+          {activeTab === "layers" && <LayerToggle />}
+          {activeTab === "info"   && <RouteInfoPanel />}
+          {activeTab === "sos"    && <SOSBlock />}
+          {activeTab === "report" && <SafetyReportBlock />}
         </div>
       </div>
     </div>
