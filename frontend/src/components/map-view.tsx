@@ -10,8 +10,8 @@ export default function MapView() {
   return (
     <MapContainer
       center={position}
-        zoom={7.3}
-        style={{ height: "100%", width: "100%" }}
+      zoom={7.3}
+      style={{ height: "100%", width: "100%" }}
     >
       <TileLayer
         attribution="© OpenStreetMap contributors"
