@@ -42,7 +42,7 @@ export default function RouteInfoPanel() {
         </div>
       </div>
 
-      {/* CTA chip */}
+      {/* CTA chip
       <div style={{
         background: "linear-gradient(135deg, #FF6BA8, #FF1A6C)",
         borderRadius: "16px", padding: "12px 14px",
@@ -65,7 +65,7 @@ export default function RouteInfoPanel() {
             <path d="M5 12h14M13 6l6 6-6 6" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

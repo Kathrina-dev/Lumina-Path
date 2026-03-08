@@ -75,10 +75,6 @@ export default function Home() {
           transition: background 0.50s ease;  
         }
 
-        .lp-sidebar.open {
-            background: white;
-        }
-
         .lp-sidebar-toggle {
           pointer-events: auto;
           align-self: center;
@@ -94,22 +90,29 @@ export default function Home() {
           box-shadow: -3px 0 12px rgba(0,0,0,0.08);
           color: #FF1A6C;
           flex-shrink: 0;
-          transition: background 0.15s;
+          transition: background 0.50s ease;
         }
         .lp-sidebar-toggle:hover { background: #fff0f5; }
 
         .lp-sidebar-panels {
-          pointer-events: auto;
-          width: 250px;
-          overflow-y: auto;
-          overflow-x: hidden;
-          padding: 14px 14px 20px 10px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          background: rgba(255,255,255,0.0);
-          transition: width 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.25s, padding 0.3s;
-          scrollbar-width: none;
+            pointer-events: auto;
+            width: 250px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 14px 14px 20px 10px;
+            border-radius: 24px 24px 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+
+            /* Glass effect */
+            background: rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-left: 1px solid rgba(255,255,255,0.35);
+            box-shadow: -6px 0 22px rgba(0,0,0,0.08);
+            transition: width 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.25s, padding 0.3s;
+            scrollbar-width: none;
         }
         .lp-sidebar-panels::-webkit-scrollbar { display: none; }
         .lp-sidebar-panels.closed {
@@ -270,7 +273,7 @@ export default function Home() {
       </div>
 
       {/* ── Desktop: Right collapsible sidebar ── */}
-      <div className={`lp-sidebar ${sidebarOpen ? "open" : ""}`}>
+      <div className="lp-sidebar">
         {/* Collapse toggle tab */}
         <button
           className="lp-sidebar-toggle"
