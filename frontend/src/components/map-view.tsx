@@ -10,32 +10,47 @@ function convertToLatLng(coords: number[][]): [number, number][] {
 // component responsible for fitting map bounds once when routes are provided
 // receives an optional `trigger` token - when it changes the component
 // will allow the effect to run again even if `routes` didn't change.
-function FitBounds({ routes, trigger }: { routes: any[]; trigger?: number }) {
+function FitBounds({
+  routes,
+  userLocation,
+  trigger,
+}: {
+  routes: any[];
+  userLocation?: LatLngExpression | null;
+  trigger?: number;
+}) {
   const map = useMap();
-  const fittedRef = useState(false); // use state to trigger rerender if needed
-  const [fitted, setFitted] = fittedRef;
+  const [fitted, setFitted] = useState(false);
 
-  // reset fitted when trigger changes
+  // allow re-fit when trigger changes
   useEffect(() => {
     setFitted(false);
   }, [trigger]);
 
   useEffect(() => {
-    if (!routes?.length || fitted) return;
+    if (fitted) return;
 
     const allCoords: [number, number][] = [];
-    routes.forEach((r) => {
+
+    // add route coordinates
+    routes?.forEach((r) => {
       if (r?.geometry?.coordinates) {
         const coords = r.geometry.coordinates as [number, number][];
         allCoords.push(...convertToLatLng(coords));
       }
     });
 
+    // add user location if available
+    if (userLocation) {
+      const [lat, lng] = userLocation as [number, number];
+      allCoords.push([lat, lng]);
+    }
+
     if (allCoords.length) {
-      map.fitBounds(allCoords);
+      map.fitBounds(allCoords, { padding: [50, 50] });
       setFitted(true);
     }
-  }, [routes, map, fitted]);
+  }, [routes, userLocation, map, fitted]);
 
   return null;
 }
@@ -107,6 +122,23 @@ export default function MapView({
   const [points, setPoints] = useState<PointInfo[]>([]);
   const [lastClick, setLastClick] = useState<{ lat: number; lon: number } | null>(null);
   const [userLocation, setUserLocation] = useState<LatLngExpression | null>(null);
+  const [reports, setReports] = useState<{ lat: number; lon: number }[]>([]);
+
+  useEffect(() => {
+    const fetchReports = async () => {
+      try {
+        const base = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+        const res = await fetch(`${base}/api/reports`);
+        const data = await res.json();
+
+        setReports(data);
+      } catch (err) {
+        console.warn("failed to fetch reports", err);
+      }
+    };
+
+    fetchReports();
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -186,7 +218,11 @@ export default function MapView({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <FitBounds routes={routes} trigger={fitTrigger} />
+      <FitBounds
+        routes={routes}
+        userLocation={userLocation}
+        trigger={fitTrigger}
+      />
       <ClickHandler />
 
       {/* User clicked location */}
@@ -273,6 +309,22 @@ export default function MapView({
           </Marker>
         );
       })}
+
+      {/* Reported safety incidents */}
+      {reports.map((r, i) => (
+        <CircleMarker
+          key={`report-${i}`}
+          center={[r.lat, r.lon]}
+          radius={10}
+          pathOptions={{
+            color: "#FF0000",
+            fillColor: "#FF0000",
+            fillOpacity: 0.8,
+          }}
+        >
+          <Popup>Reported unsafe area</Popup>
+        </CircleMarker>
+      ))}
     </MapContainer>
   );
 }

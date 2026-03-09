@@ -471,14 +471,10 @@ export default function Home() {
             }}
           />
           <RouteInfoPanel
-            crowdScore={latestScores.crowdScore}
-            lightingScore={latestScores.lightingScore}
-            routeScore={
+            routes={
               showAllRoutes
-                ? undefined
-                : routeScores[
-                    allRoutes.findIndex((r) => r.type === routePref)
-                  ]
+                ? allRoutes.filter((r) => r.type === "safest")
+                : allRoutes.filter((r) => r.type === routePref)
             }
           />
           {/* Divider */}
@@ -520,7 +516,15 @@ export default function Home() {
               }}
             />
           )}
-          {activeTab === "info"   && <RouteInfoPanel />}
+          {activeTab === "info"   && (
+            <RouteInfoPanel
+              routes={
+                showAllRoutes
+                  ? allRoutes.filter((r) => r.type === "safest")
+                  : allRoutes.filter((r) => r.type === routePref)
+              }
+            />
+          )}
           {activeTab === "sos"    && <SOSBlock />}
           {activeTab === "report" && <SafetyReportBlock />}
         </div>
