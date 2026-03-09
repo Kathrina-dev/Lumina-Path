@@ -3,14 +3,28 @@ import { useState } from "react";
 
 const layers = [
   { key: "lighting", label: "Street Lighting", emoji: "💡", defaultOn: true },
+  { key: "crowd",    label: "Crowd Density",    emoji: "👥", defaultOn: true },
   { key: "stores",   label: "Open Stores",     emoji: "🏪", defaultOn: false },
   { key: "reports",  label: "Safety Reports",  emoji: "🛡️", defaultOn: false },
 ];
 
-export default function LayerToggle() {
+interface LayerToggleProps {
+  /** called whenever the active layer map changes */
+  onChange?: (active: Record<string, boolean>) => void;
+  /** initial state, defaults to `layers[].defaultOn` */
+  initialState?: Record<string, boolean>;
+}
+
+export default function LayerToggle({ onChange, initialState }: LayerToggleProps) {
   const [active, setActive] = useState<Record<string, boolean>>(
-    Object.fromEntries(layers.map((l) => [l.key, l.defaultOn]))
+    initialState ?? Object.fromEntries(layers.map((l) => [l.key, l.defaultOn]))
   );
+
+  const toggle = (key: string) => {
+    const next = { ...active, [key]: !active[key] };
+    setActive(next);
+    onChange?.(next);
+  };
 
   return (
     <div style={{
@@ -29,7 +43,7 @@ export default function LayerToggle() {
           return (
             <div
               key={layer.key}
-              onClick={() => setActive((p) => ({ ...p, [layer.key]: !p[layer.key] }))}
+              onClick={() => toggle(layer.key)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "9px 12px", borderRadius: "13px",

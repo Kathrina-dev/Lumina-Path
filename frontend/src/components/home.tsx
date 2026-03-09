@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import SearchPanel from "./search-panel";
 import RouteControls from "./route-controls";
 import LayerToggle from "./layer-toggle";
@@ -15,6 +15,61 @@ type TabKey = "search" | "route" | "layers" | "info" | "sos" | "report";
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // routing-related state
+  const [userLocation, setUserLocation] = useState<{lat:number;lon:number} | null>(null);
+  const [destination, setDestination] = useState<{lat:number;lon:number} | null>(null);
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [routeScores, setRouteScores] = useState<any[]>([]);
+
+  // handle safe-route querying
+  const fetchSafeRoute = async (start: {lat:number;lon:number}, dest: {lat:number;lon:number}) => {
+    const base = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+    try {
+      const res = await fetch(`${base}/safe-route`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start, end: dest }),
+      });
+      const json = await res.json();
+      if (json.routes) {
+        // convert object to array [fastest, safest, balanced]
+        const arr = [json.routes.fastest, json.routes.safest, json.routes.balanced].filter(Boolean);
+        setRoutes(arr);
+        // safety scores may live on each route under .safety
+        const scores = arr.map((r: any) => r.safety || {});
+        setRouteScores(scores);
+      }
+    } catch (err) {
+      console.error("failed to fetch safe route", err);
+    }
+  };
+
+  const handleSearch = (dest: {lat:number; lon:number}) => {
+    setDestination(dest);
+    if (userLocation) {
+      fetchSafeRoute(userLocation, dest);
+    }
+  };
+
+  // when the userLocation becomes available after a search has been entered,
+  // trigger the route fetch if we already have a destination.
+  useEffect(() => {
+    if (userLocation && destination) {
+      fetchSafeRoute(userLocation, destination);
+    }
+  }, [userLocation, destination]);
+
+  // active map layers (lighting, stores, reports etc.)
+  const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>({
+    lighting: true,
+    crowd: true,
+    stores: false,
+    reports: false,
+  });
+
+  const [latestScores, setLatestScores] = useState<{crowdScore?: number; lightingScore?: number}>({});
+
 
   // Mobile bottom sheet state
   const [activeTab, setActiveTab] = useState<TabKey>("search");
@@ -196,7 +251,14 @@ export default function Home() {
 
       {/* map occupies full screen behind everything else */}
       <div className="lp-map-bg" style={{ position: "absolute", inset: 0, zIndex: 0 }}>
-        <MapView />
+        <MapView
+          activeLayers={activeLayers}
+          onScores={setLatestScores}
+          onLocation={(loc) => setUserLocation(loc)}
+          startLocation={userLocation}
+          destination={destination}
+          routes={routes}
+        />
       </div>
 
       {/* ── Header ── */}
@@ -207,22 +269,54 @@ export default function Home() {
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-          <div style={{
-            width: "36px", height: "36px", borderRadius: "11px", flexShrink: 0,
-            background: "linear-gradient(145deg, #FF6BA8, #FF1A6C)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 4px 14px rgba(255,26,108,0.35)",
-          }}>
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="white"/>
-              <circle cx="12" cy="9" r="2.6" fill="rgba(255,26,108,0.5)"/>
-            </svg>
+          <div
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "11px",
+              flexShrink: 0,
+              background: "linear-gradient(145deg, #FF6BA8, #FF1A6C)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 14px rgba(255,26,108,0.35)",
+              overflow: "hidden"
+            }}
+          >
+            <img
+              src="/lumina-logo.png"
+              alt="Lumina Logo"
+              style={{
+                width: "20px",
+                height: "20px",
+                objectFit: "contain"
+              }}
+            />
           </div>
+
           <div>
-            <div style={{ fontWeight: "800", fontSize: "0.98rem", color: "#1a1a1a", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+            <div
+              style={{
+                fontWeight: "800",
+                fontSize: "0.98rem",
+                color: "#1a1a1a",
+                letterSpacing: "-0.02em",
+                lineHeight: 1.1,
+              }}
+            >
               Lumina Path
             </div>
-            <div className="lp-header-sub" style={{ fontSize: "0.6rem", color: "#FF1A6C", fontWeight: "700", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+
+            <div
+              className="lp-header-sub"
+              style={{
+                fontSize: "0.6rem",
+                color: "#FF1A6C",
+                fontWeight: "700",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}
+            >
               Safe Night Navigation
             </div>
           </div>
@@ -269,7 +363,7 @@ export default function Home() {
 
       {/* ── Desktop: Search panel top-left ── */}
       <div className="lp-desktop-search" style={{ position: "absolute", top: "72px", left: "14px", zIndex: 20 }}>
-        <SearchPanel />
+        <SearchPanel userLocation={userLocation} onSearch={handleSearch} />
       </div>
 
       {/* ── Desktop: Right collapsible sidebar ── */}
@@ -291,8 +385,12 @@ export default function Home() {
         {/* Panels column */}
         <div className={`lp-sidebar-panels${sidebarOpen ? "" : " closed"}`}>
           <RouteControls />
-          <LayerToggle />
-          <RouteInfoPanel />
+          <LayerToggle initialState={activeLayers} onChange={setActiveLayers} />
+          <RouteInfoPanel
+            crowdScore={latestScores.crowdScore}
+            lightingScore={latestScores.lightingScore}
+            routeScore={routeScores[0]}
+          />
           {/* Divider */}
           <div style={{ height: "1px", background: "rgba(255,26,108,0.12)", margin: "2px 0" }} />
           <SOSBlock />
@@ -318,7 +416,7 @@ export default function Home() {
           ))}
         </div>
         <div className="lp-sheet-content">
-          {activeTab === "search" && <SearchPanel />}
+          {activeTab === "search" && <SearchPanel userLocation={userLocation} onSearch={handleSearch} />}
           {activeTab === "route"  && <RouteControls />}
           {activeTab === "layers" && <LayerToggle />}
           {activeTab === "info"   && <RouteInfoPanel />}
