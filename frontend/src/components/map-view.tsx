@@ -1,6 +1,37 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
+// helper converts GeoJSON-style [lng, lat] arrays into Leaflet-friendly [lat, lng]
+function convertToLatLng(coords: number[][]): [number, number][] {
+  return coords.map(([lng, lat]) => [lat, lng] as [number, number]);
+}
+
+// component responsible for fitting map bounds once when routes are provided
+function FitBounds({ routes }: { routes: any[] }) {
+  const map = useMap();
+  const fittedRef = useState(false); // use state to trigger rerender if needed
+  const [fitted, setFitted] = fittedRef;
+
+  useEffect(() => {
+    if (!routes?.length || fitted) return;
+
+    const allCoords: [number, number][] = [];
+    routes.forEach((r) => {
+      if (r?.geometry?.coordinates) {
+        const coords = r.geometry.coordinates as [number, number][];
+        allCoords.push(...convertToLatLng(coords));
+      }
+    });
+
+    if (allCoords.length) {
+      map.fitBounds(allCoords);
+      setFitted(true);
+    }
+  }, [routes, map, fitted]);
+
+  return null;
+}
 import "leaflet/dist/leaflet.css";
 import {
   MapContainer,
@@ -27,7 +58,16 @@ const pinIcon = L.divIcon({
 });
 
 const defaultPosition: LatLngExpression = [20.2376, 84.27];
-const routeColors = ["#2979FF", "#00C853", "#FF6D00"];
+// kept in sync with RouteControls and Home logic
+// order here no longer important; using map below instead
+//  fastest   -> blue
+//  safest    -> green
+//  balanced  -> orange
+const routeColorMap: Record<string, string> = {
+  fastest: "#2979FF",
+  safest: "#00C853",
+  balanced: "#FF6D00",
+};
 
 interface PointInfo {
   lat: number;
@@ -42,6 +82,7 @@ interface MapViewProps {
   onLocation?: (loc: { lat: number; lon: number }) => void;
   startLocation?: { lat: number; lon: number } | null;
   destination?: { lat: number; lon: number } | null;
+  // each route may include a `type` field added by Home ("fastest"|"safest"|"balanced")
   routes?: Array<any>;
 }
 
@@ -57,9 +98,6 @@ export default function MapView({
   const [points, setPoints] = useState<PointInfo[]>([]);
   const [lastClick, setLastClick] = useState<{ lat: number; lon: number } | null>(null);
   const [userLocation, setUserLocation] = useState<LatLngExpression | null>(null);
-  const coords: [number, number][] = convertToLatLng(route.geometry.coordinates);
-  const offset = i * 0.00005;
-  const offsetCoords = coords.map(([lat, lng]) => [lat + offset, lng + offset] as [number, number]);
 
   useEffect(() => {
     setMounted(true);
@@ -112,33 +150,6 @@ export default function MapView({
     }
   };
 
-  function convertToLatLng(coords: number[][]): [number, number][] {
-    return coords.map(([lng, lat]) => [lat, lng] as [number, number]);
-  }
-
-  function FitBounds({ routes }: { routes: any[] }) {
-    const map = useMap();
-    const [fitted, setFitted] = useState(false);
-
-    useEffect(() => {
-      if (!routes?.length || fitted) return;
-
-      const allCoords: [number, number][] = [];
-      routes.forEach((r) => {
-        if (r?.geometry?.coordinates) {
-          allCoords.push(...r.geometry.coordinates.map(([lng, lat]) => [lat, lng]));
-        }
-      });
-
-      if (allCoords.length) {
-        map.fitBounds(allCoords);
-        setFitted(true); // only fit once
-      }
-    }, [routes, map, fitted]);
-
-    return null;
-  }
-
   function ClickHandler() {
     useMapEvents({
       click: (e: LeafletMouseEvent) => {
@@ -153,14 +164,14 @@ export default function MapView({
 
   return (
     <MapContainer
-    center={defaultPosition}
-    zoom={7.3}
-    style={{ height: "100vh", width: "100vw" }}
-    scrollWheelZoom={true}
-    dragging={true}
-    doubleClickZoom={true}
-    touchZoom={true}
-  >
+      center={defaultPosition}
+      zoom={7.3}
+      style={{ height: "100vh", width: "100vw" }}
+      scrollWheelZoom={true}
+      dragging={true}
+      doubleClickZoom={true}
+      touchZoom={true}
+    >
       <TileLayer
         attribution="© OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -199,19 +210,17 @@ export default function MapView({
       {routes?.map((route: any, i: number) => {
         if (!route?.geometry?.coordinates) return null;
 
-        // convert coordinates
         const coords: [number, number][] = convertToLatLng(route.geometry.coordinates);
-
-        // optional: slightly offset overlapping routes for visibility
         const offset = i * 0.00005; // ~5 meters
         const offsetCoords = coords.map(([lat, lng]) => [lat + offset, lng + offset] as [number, number]);
 
+        const color = routeColorMap[route.type] || "#888";
         return (
           <Polyline
             key={`route-${i}`}
             positions={offsetCoords}
             pathOptions={{
-              color: routeColors[i] || "#888",
+              color,
               weight: 6,
               opacity: 0.9,
             }}
@@ -221,7 +230,7 @@ export default function MapView({
 
       {/* Risk zones */}
       {routes?.map((route: any) =>
-        route?.safety?.riskZones?.map((zone: any, i: number) => {
+        route?.safety?.riskZones?.map((zone: { coordinates: [number, number] }, i: number) => {
           const [lng, lat] = zone.coordinates;
           return (
             <CircleMarker

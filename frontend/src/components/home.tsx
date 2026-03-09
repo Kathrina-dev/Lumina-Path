@@ -19,8 +19,12 @@ export default function Home() {
   // routing-related state
   const [userLocation, setUserLocation] = useState<{lat:number;lon:number} | null>(null);
   const [destination, setDestination] = useState<{lat:number;lon:number} | null>(null);
-  const [routes, setRoutes] = useState<any[]>([]);
+  const [pendingDestination, setPendingDestination] = useState<{lat:number;lon:number} | null>(null);
+  // keep the full array of routes with type metadata
+  const [allRoutes, setAllRoutes] = useState<any[]>([]);
   const [routeScores, setRouteScores] = useState<any[]>([]);
+  const [routePref, setRoutePref] = useState<"all"|"safest"|"balanced"|"fastest">("all");
+  const [showAllRoutes, setShowAllRoutes] = useState(false);
   const lastRoute = useRef<string | null>(null);
   const [latestScores, setLatestScores] = useState<{crowdScore?: number; lightingScore?: number}>({});
   const fetchingRoute = useRef(false);
@@ -50,13 +54,13 @@ export default function Home() {
       const json = await res.json();
 
       if (json.routes) {
-        const arr = [
-          json.routes.fastest,
-          json.routes.safest,
-          json.routes.balanced,
-        ].filter(Boolean);
+        // annotate each route with its key so we can filter later
+        const arr: any[] = [];
+        if (json.routes.fastest) arr.push({ ...json.routes.fastest, type: "fastest" });
+        if (json.routes.safest) arr.push({ ...json.routes.safest, type: "safest" });
+        if (json.routes.balanced) arr.push({ ...json.routes.balanced, type: "balanced" });
 
-        setRoutes(arr);
+        setAllRoutes(arr);
 
         const scores = arr.map((r: any) => r.safety || {});
         setRouteScores(scores);
@@ -66,30 +70,30 @@ export default function Home() {
     }
   }, []);
 
+  // called by SearchPanel when the user hits the button
   const handleSearch = (dest: { lat: number; lon: number }) => {
     setDestination(dest);
+    setPendingDestination(dest);
   };
 
-  // when the userLocation becomes available after a search has been entered,
-  // trigger the route fetch if we already have a destination.
+  // trigger route request only when user explicitly searches
   useEffect(() => {
-    if (!userLocation || !destination) return;
+    if (!userLocation || !pendingDestination) return;
 
-    // prevent duplicate requests for the same route
-    const key = `${userLocation.lat},${userLocation.lon}-${destination.lat},${destination.lon}`;
-
+    const key = `${userLocation.lat},${userLocation.lon}-${pendingDestination.lat},${pendingDestination.lon}`;
     if (lastRoute.current === key) return;
     lastRoute.current = key;
 
     if (fetchingRoute.current) return;
-
     fetchingRoute.current = true;
 
-    fetchSafeRoute(userLocation, destination).finally(() => {
-      fetchingRoute.current = false;
-    });
-
-  }, [userLocation, destination, fetchSafeRoute]);
+    fetchSafeRoute(userLocation, pendingDestination)
+      .finally(() => {
+        fetchingRoute.current = false;
+        setShowAllRoutes(true);
+        setPendingDestination(null);
+      });
+  }, [userLocation, pendingDestination, fetchSafeRoute]);
 
   // Mobile bottom sheet state
   const [activeTab, setActiveTab] = useState<TabKey>("search");
@@ -326,7 +330,11 @@ export default function Home() {
           onLocation={(loc) => setUserLocation(loc)}
           startLocation={userLocation}
           destination={destination}
-          routes={routes}
+          routes={
+            showAllRoutes
+              ? allRoutes
+              : allRoutes.filter((r) => r.type === routePref)
+          }
         />
       </div>
 
@@ -453,12 +461,24 @@ export default function Home() {
 
         {/* Panels column */}
         <div className={`lp-sidebar-panels${sidebarOpen ? "" : " closed"}`}>
-          <RouteControls />
+          <RouteControls
+            selected={routePref === "all" ? undefined : (routePref as any)}
+            onChange={(key) => {
+              setRoutePref(key);
+              setShowAllRoutes(false);
+            }}
+          />
           <LayerToggle initialState={activeLayers} onChange={setActiveLayers} />
           <RouteInfoPanel
             crowdScore={latestScores.crowdScore}
             lightingScore={latestScores.lightingScore}
-            routeScore={routeScores[0]}
+            routeScore={
+              showAllRoutes
+                ? undefined
+                : routeScores[
+                    allRoutes.findIndex((r) => r.type === routePref)
+                  ]
+            }
           />
           {/* Divider */}
           <div style={{ height: "1px", background: "rgba(255,26,108,0.12)", margin: "2px 0" }} />
@@ -490,7 +510,15 @@ export default function Home() {
         </div>
         <div className="lp-sheet-content">
           {activeTab === "search" && <SearchPanel userLocation={userLocation} onSearch={handleSearch} />}
-          {activeTab === "route"  && <RouteControls />}
+          {activeTab === "route"  && (
+            <RouteControls
+              selected={routePref === "all" ? undefined : (routePref as any)}
+              onChange={(key) => {
+                setRoutePref(key);
+                setShowAllRoutes(false);
+              }}
+            />
+          )}
           {activeTab === "layers" && <LayerToggle />}
           {activeTab === "info"   && <RouteInfoPanel />}
           {activeTab === "sos"    && <SOSBlock />}

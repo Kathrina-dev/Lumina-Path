@@ -15,14 +15,18 @@ export default function SearchPanel({ userLocation, onSearch }: SearchPanelProps
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [lastQuery, setLastQuery] = useState(""); // avoid repeating same geocode call
+  const [selectedLocation, setSelectedLocation] = useState<{lat:number;lon:number} | null>(null);
 
   const handleSearch = async () => {
-    if (loading) return;            // already fetching
-    if (!dest || dest === lastQuery) return; // nothing new
+    if (loading) return;
+    if (!dest || dest === lastQuery) return;
 
     setLoading(true);
     try {
-      const location = await geocode(dest);
+      let location = selectedLocation;
+      if (!location) {
+        location = await geocode(dest);
+      }
       if (location) {
         onSearch(location);
         setLastQuery(dest);
@@ -109,11 +113,7 @@ export default function SearchPanel({ userLocation, onSearch }: SearchPanelProps
   const selectSuggestion = (s: Suggestion) => {
     setDest(s.display_name);
     setSuggestions([]);
-
-    onSearch({
-      lat: parseFloat(s.lat),
-      lon: parseFloat(s.lon),
-    });
+    setSelectedLocation({ lat: parseFloat(s.lat), lon: parseFloat(s.lon) });
   };
 
   /* ---------------- Keyboard Navigation ---------------- */

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const routes = [
   { key: "safest",   label: "Safest",   sub: "Well-lit & populated",
@@ -10,8 +10,22 @@ const routes = [
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2L4.5 13.5H12L11 22L19.5 10.5H12L13 2Z" fill="currentColor"/></svg> },
 ];
 
-export default function RouteControls() {
-  const [selected, setSelected] = useState("safest");
+type RouteKey = "safest" | "balanced" | "fastest";
+
+interface RouteControlsProps {
+  selected?: RouteKey;
+  onChange?: (key: RouteKey) => void;
+}
+
+export default function RouteControls({ selected: propSelected, onChange }: RouteControlsProps) {
+  const [selected, setSelected] = useState<string>(propSelected || "safest");
+
+  // keep local state in sync if parent controls it
+  useEffect(() => {
+    if (propSelected !== undefined && propSelected !== selected) {
+      setSelected(propSelected);
+    }
+  }, [propSelected]);
 
   return (
     <div style={{
@@ -33,7 +47,11 @@ export default function RouteControls() {
             return (
               <button
                 key={r.key}
-                onClick={() => setSelected(r.key)}
+                onClick={() => {
+                  setSelected(r.key);
+                  // r.key is typed as string; assert RouteKey
+                  onChange?.(r.key as RouteKey);
+                }}
                 style={{
                   display: "flex", alignItems: "center", gap: "10px",
                   padding: "9px 12px", borderRadius: "13px", border: "none",
