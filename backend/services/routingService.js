@@ -11,48 +11,63 @@ const OSRM_URL = "http://router.project-osrm.org/route/v1/walking";
  * @param {number} endLon - End longitude
  * @returns {Array} Array of route objects with geometry
  */
+
 async function getRoutes(startLat, startLon, endLat, endLon) {
-  const cacheKey = `routes_${startLat}_${startLon}_${endLat}_${endLon}`;
-  
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
 
-  try {
-    // Validate coordinates
-    if (!isValidCoordinate(startLat, startLon) || !isValidCoordinate(endLat, endLon)) {
-      throw new Error('Invalid coordinates provided');
-    }
+  const routes = [];
 
-    const url = `${OSRM_URL}/${startLon},${startLat};${endLon},${endLat}?alternatives=3&overview=full&geometries=geojson&steps=false`;
+  // normal route
+  const r1 = await fetchRoute(startLat, startLon, endLat, endLon);
+  routes.push(...r1);
 
-    const response = await fetch(url, {
-      timeout: 10000
-    });
+  // shift north
+  const r2 = await fetchRoute(
+    startLat + 0.003,
+    startLon,
+    endLat,
+    endLon
+  );
+  routes.push(...r2);
 
-    if (!response.ok) {
-      throw new Error(`OSRM API error: ${response.status}`);
-    }
+  // shift east
+  const r3 = await fetchRoute(
+    startLat,
+    startLon + 0.003,
+    endLat,
+    endLon
+  );
+  routes.push(...r3);
 
-    const data = await response.json();
+  // shift destination south
+  const r4 = await fetchRoute(
+    startLat,
+    startLon,
+    endLat - 0.003,
+    endLon
+  );
+  routes.push(...r4);
 
-    if (data.code !== 'Ok' || !data.routes) {
-      throw new Error(`No routes found: ${data.message}`);
-    }
+  return routes.slice(0, 3);
+}
 
-    // Add metadata to each route
-    const routesWithMetadata = data.routes.map((route, index) => ({
-      ...route,
-      routeIndex: index,
-      distance: route.distance,
-      duration: route.duration
-    }));
+async function fetchRoute(startLat, startLon, endLat, endLon) {
 
-    cache.set(cacheKey, routesWithMetadata);
-    return routesWithMetadata;
-  } catch (error) {
-    console.error("Error fetching routes:", error);
-    throw new Error(`Failed to fetch routes: ${error.message}`);
-  }
+  const url =
+    `${OSRM_URL}/${startLon},${startLat};${endLon},${endLat}` +
+    `?alternatives=3&overview=full&geometries=geojson&steps=false`;
+
+  const response = await fetch(url);
+
+  const data = await response.json();
+
+  if (!data.routes) return [];
+
+  return data.routes.map((route, index) => ({
+    ...route,
+    routeIndex: index,
+    distance: route.distance,
+    duration: route.duration
+  }));
 }
 
 /**

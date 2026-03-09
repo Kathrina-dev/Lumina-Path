@@ -4,7 +4,7 @@ require('dotenv').config();
 const cors = require('cors');
 const connectDB = require("./config/db");
 
-
+connectDB();
 // Middleware
 require("dotenv").config();
 
