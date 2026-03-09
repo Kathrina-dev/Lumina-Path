@@ -42,7 +42,7 @@ export default function Home() {
     start: { lat: number; lon: number },
     dest: { lat: number; lon: number }
   ) => {
-    const base = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+    const base = process.env.NEXT_PUBLIC_BACKEND_URL || 5000;
 
     try {
       const res = await fetch(`${base}/api/safe-route`, {
