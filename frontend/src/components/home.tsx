@@ -16,6 +16,16 @@ type TabKey = "search" | "route" | "layers" | "info" | "sos" | "report";
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // active map layers (lighting, stores, reports etc.)
+  const [activeLayers, setActiveLayers] = useState<Record<string, boolean>>({
+    lighting: true,
+    crowd: true,
+    stores: false,
+    reports: false,
+  });
+
+  const [latestScores, setLatestScores] = useState<{crowdScore?: number; lightingScore?: number}>({});
+
   // Mobile bottom sheet state
   const [activeTab, setActiveTab] = useState<TabKey>("search");
   const [sheetOpen, setSheetOpen] = useState(true);
@@ -196,7 +206,10 @@ export default function Home() {
 
       {/* map occupies full screen behind everything else */}
       <div className="lp-map-bg" style={{ position: "absolute", inset: 0, zIndex: 0 }}>
-        <MapView />
+        <MapView
+          activeLayers={activeLayers}
+          onScores={setLatestScores}
+        />
       </div>
 
       {/* ── Header ── */}
@@ -291,8 +304,11 @@ export default function Home() {
         {/* Panels column */}
         <div className={`lp-sidebar-panels${sidebarOpen ? "" : " closed"}`}>
           <RouteControls />
-          <LayerToggle />
-          <RouteInfoPanel />
+          <LayerToggle initialState={activeLayers} onChange={setActiveLayers} />
+          <RouteInfoPanel
+            crowdScore={latestScores.crowdScore}
+            lightingScore={latestScores.lightingScore}
+          />
           {/* Divider */}
           <div style={{ height: "1px", background: "rgba(255,26,108,0.12)", margin: "2px 0" }} />
           <SOSBlock />

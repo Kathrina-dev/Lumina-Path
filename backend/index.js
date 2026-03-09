@@ -1,6 +1,9 @@
 const express = require('express');
+const cors = require('cors');
 const app = express();
 require('dotenv').config();
+
+app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
 
 const {getLightingScore} = require("./services/osmService")
@@ -9,7 +12,7 @@ const safeRoute = require("./routes/safeRoute");
 
 
 
-const PORT = process.env.PORT || 3000;
+const PORT = 5000;
 
 app.get('/', (req, res) => {
   res.send('Hello, Lumina Path!');

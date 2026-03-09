@@ -1,7 +1,6 @@
 
 
 async function getCrowdScore(lat, lon) {
-
   const query = `
 [out:json];
 (
@@ -17,21 +16,31 @@ async function getCrowdScore(lat, lon) {
 out;
 `;
 
-  const response = await fetch(
-    "https://overpass-api.de/api/interpreter",
-    {
+  let response;
+  try {
+    response = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
-      body: query
-    }
-  );
+      body: query,
+    });
+  } catch (err) {
+    console.warn("getCrowdScore: network error", err.message || err);
+    return 0;
+  }
 
-   const data = await response.json();
-   console.log(data);
+  let data;
+  try {
+    data = await response.json();
+  } catch (err) {
+    console.warn("getCrowdScore: failed to parse Overpass response as JSON", err.message);
+    return 0;
+  }
+
+  if (!data || !Array.isArray(data.elements)) return 0;
 
   let score = 0;
-  let total=0;
+  let total = 0;
 
-  data.elements.forEach(place => {
+  data.elements.forEach((place) => {
     total++;
     const amenity = place.tags.amenity;
     const shop = place.tags.shop;
@@ -45,11 +54,10 @@ out;
     else if (amenity === "taxi") score += 2;
     else if (shop) score += 2;});
 
-  return score/total;
+  return total === 0 ? 0 : score / total;
 }
 
 async function getLightingScore(lat, lon) {
-
   const query = `
   [out:json];
   (
@@ -59,26 +67,31 @@ async function getLightingScore(lat, lon) {
   out tags;
   `;
 
-  const response = await fetch(
-    "https://overpass-api.de/api/interpreter",
-    {
+  let response;
+  try {
+    response = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
-      body: query
-    }
-  );
+      body: query,
+    });
+  } catch (err) {
+    console.warn("getLightingScore: network error", err.message || err);
+    return 0;
+  }
 
-  const data = await response.text()
+  let data;
+  try {
+    data = await response.json();
+  } catch (err) {
+    console.warn("getLightingScore: failed to parse Overpass response", err.message);
+    return 0;
+  }
+
+  if (!data || !Array.isArray(data.elements)) return 0;
 
   let score = 0;
   let total = 0;
-  try {
-  data = JSON.parse(text);
-} catch (err) {
-  console.log("Overpass returned non-JSON response");
-  return 0;
-}
 
-  data.elements.forEach(el => {
+  data.elements.forEach((el) => {
 
     if (!el.tags) return;
 
@@ -91,9 +104,7 @@ async function getLightingScore(lat, lon) {
 
   });
 
-  if (total === 0) return 0;
-
-  return score / total;
+  return total === 0 ? 0 : score / total;
 }
 
 module.exports = { getCrowdScore,getLightingScore };
