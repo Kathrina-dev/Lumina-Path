@@ -1,42 +1,51 @@
 const express = require('express');
 const app = express();
 require('dotenv').config();
+const cors = require('cors');
+
+// Middleware
 app.use(express.json());
+app.use(cors());
 
-const {getLightingScore} = require("./services/osmService")
-const crowdRoutes=require("./routes/crowd")
-const safeRoute = require("./routes/safeRoute");
-
-
+// Routes
+const safeRouteRoutes = require("./routes/safeRoute");
+const crowdRoutes = require("./routes/crowd");
+const lightingRoutes = require("./routes/lighting");
+const reportsRoutes = require("./routes/reports");
+const safePlacesRoutes = require("./routes/Safeplaces");
 
 const PORT = process.env.PORT || 3000;
 
+// Health check
 app.get('/', (req, res) => {
-  res.send('Hello, Lumina Path!');
-});
-
-app.use("/safe-route", safeRoute);
-app.use("/crowd", crowdRoutes);
-
-
-
-app.get("/lighting", async (req, res) => {
-
-  const { lat, lon } = req.query;
-
-  const lightingScore = await getLightingScore(lat, lon);
-
-  res.json({
-    lightingScore
+  res.json({ 
+    message: 'Welcome to Lumina Path API',
+    version: '1.0.0',
+    status: 'operational'
   });
-//   score > 4 → Well Lit
-// score 2–4 → Moderate
-// score < 2 → Dark
-
 });
 
+// API Routes
+app.use("/api/safe-route", safeRouteRoutes);
+app.use("/api/crowd", crowdRoutes);
+app.use("/api/lighting", lightingRoutes);
+app.use("/api/reports", reportsRoutes);
+app.use("/api/safe-places", safePlacesRoutes);
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error',
+    status: err.status || 500
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`🚀 Lumina Path Server running on port ${PORT}`);
 });
