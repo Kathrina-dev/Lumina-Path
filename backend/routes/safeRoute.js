@@ -2,38 +2,135 @@ const express = require("express");
 const router = express.Router();
 
 const { getRoutes } = require("../services/routingService");
-const { calculateRouteSafety } = require("../services/safetyService");
+const { rankRoutesBySafety, calculateRouteSafety } = require("../services/safetyService");
 
+/**
+ * POST /api/safe-route
+ * Calculate safest route between two points
+ * 
+ * Request body:
+ * {
+ *   "start": { "lat": number, "lon": number },
+ *   "end": { "lat": number, "lon": number }
+ * }
+ * 
+ * Response:
+ * {
+ *   "safestRoute": {...},
+ *   "allRoutes": [...]
+ * }
+ */
 router.post("/", async (req, res) => {
+  try {
+    const { start, end } = req.body;
 
-  const { start, end } = req.body;
-
-  const routes = await getRoutes(
-    start.lat,
-    start.lon,
-    end.lat,
-    end.lon
-  );
-
-  let safestRoute = null;
-  let bestScore = -Infinity;
-
-  for (const route of routes) {
-
-    const score = await calculateRouteSafety(route);
-
-    if (score > bestScore) {
-      bestScore = score;
-      safestRoute = route;
+    // Validation
+    if (!start || !end || typeof start.lat !== 'number' || typeof start.lon !== 'number') {
+      return res.status(400).json({
+        error: 'Invalid request. Please provide start and end coordinates.',
+        example: {
+          start: { lat: 40.7128, lon: -74.0060 },
+          end: { lat: 40.7589, lon: -73.9851 }
+        }
+      });
     }
 
+    // Get all route alternatives
+    const routes = await getRoutes(
+      start.lat,
+      start.lon,
+      end.lat,
+      end.lon
+    );
+
+    if (routes.length === 0) {
+      return res.status(404).json({ error: 'No routes found between the given coordinates' });
+    }
+
+    // Rank routes by safety
+    const rankedRoutes = await rankRoutesBySafety(routes);
+    const fastest = routes.reduce((a, b) =>
+      a.duration < b.duration ? a : b
+    );
+
+    const safest = rankedRoutes[0];
+
+    const balanced = rankedRoutes.reduce((a, b) => {
+
+      const scoreA = a.safety.overallScore / a.duration;
+      const scoreB = b.safety.overallScore / b.duration;
+
+      return scoreA > scoreB ? a : b;
+    });
+
+    res.json({
+      success: true,
+      routes: {
+        fastest,
+        safest,
+        balanced
+      },
+      totalRoutesAnalyzed: rankedRoutes.length
+    });
+
+  } catch (error) {
+    console.error("Error in safe-route endpoint:", error);
+    res.status(500).json({
+      error: error.message || 'Failed to calculate safe route'
+    });
   }
+});
 
+/**
+ * POST /api/safe-route/compare
+ * Compare safety of specific routes
+ * 
+ * Request body:
+ * {
+ *   "routes": [array of route geometry objects]
+ * }
+ */
+router.post("/compare", async (req, res) => {
+  try {
+    const { routes } = req.body;
+
+    if (!Array.isArray(routes) || routes.length === 0) {
+      return res.status(400).json({
+        error: 'Please provide an array of routes to compare'
+      });
+    }
+
+    const safetyScores = await Promise.all(
+      routes.map(route => calculateRouteSafety(route))
+    );
+
+    res.json({
+      success: true,
+      routeComparison: routes.map((route, index) => ({
+        routeIndex: index,
+        safety: safetyScores[index]
+      })),
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("Error in compare endpoint:", error);
+    res.status(500).json({
+      error: error.message || 'Failed to compare routes'
+    });
+  }
+});
+
+/**
+ * GET /api/safe-route/health
+ * Check if routing service is operational
+ */
+router.get("/health", (req, res) => {
   res.json({
-    safetyScore: bestScore,
-    safestRoute
+    status: 'operational',
+    service: 'safe-route',
+    timestamp: new Date().toISOString()
   });
-
 });
 
 module.exports = router;
