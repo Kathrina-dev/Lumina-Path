@@ -8,22 +8,23 @@ import {
   Marker,
   Popup,
   useMapEvents,
+  Polyline,
 } from "react-leaflet";
-import { LatLngExpression, DivIcon } from "leaflet";
-import { MapPin } from 'lucide-react';
-import ReactDOMServer from 'react-dom/server';
+import L, { LatLngExpression } from "leaflet";
+import { MapPin } from "lucide-react";
+import ReactDOMServer from "react-dom/server";
+
+// simple pink pin using lucide icon rendered to HTML string
+const pinIcon = L.divIcon({
+  className: "", // no extra wrapper styling
+  html: ReactDOMServer.renderToString(
+    <MapPin strokeWidth={1.5} size={30} color="#FF1A6C" />
+  ),
+  iconAnchor: [15, 30],
+  popupAnchor: [0, -28],
+});
 
 const position: LatLngExpression = [20.2376, 84.27];
-
-// create a custom icon using lucide-react MapPin svg
-
-const pinSvg = ReactDOMServer.renderToStaticMarkup(<MapPin size={24} color="#FF1A6C" />);
-const pinIcon = new DivIcon({
-  html: pinSvg,
-  className: '',
-  iconSize: [24, 24],
-  iconAnchor: [12, 24],
-});
 
 interface PointInfo {
   lat: number;
@@ -36,16 +37,34 @@ interface MapViewProps {
   activeLayers: Record<string, boolean>;
   /** invoked when new crowd/lighting data is fetched */
   onScores?: (scores: { crowdScore?: number; lightingScore?: number }) => void;
+  /** notified when geolocation is obtained */
+  onLocation?: (loc: { lat: number; lon: number }) => void;
+  startLocation?: { lat: number; lon: number } | null;
+  destination?: { lat: number; lon: number } | null;
+  routes?: Array<any>;
 }
 
-export default function MapView({ activeLayers, onScores }: MapViewProps) {
+export default function MapView({ activeLayers, onScores, onLocation, startLocation, destination, routes = [] }: MapViewProps) {
   const [mounted, setMounted] = useState(false);
   const [points, setPoints] = useState<PointInfo[]>([]);
-  const [lastClick, setLastClick] = useState<{lat:number; lon:number} | null>(null);
+  const [lastClick, setLastClick] = useState<{ lat: number; lon: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<LatLngExpression | null>(null);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+          setUserLocation([loc.lat, loc.lon]);
+          onLocation?.(loc);
+        },
+        (err) => console.warn("geolocation failed", err),
+        { enableHighAccuracy: true }
+      );
+    }
+  }, [onLocation]);
 
   // helper to fetch scores for a clicked location
   const fetchScores = async (lat: number, lon: number) => {
@@ -108,7 +127,34 @@ export default function MapView({ activeLayers, onScores }: MapViewProps) {
 
       {lastClick && (
         <Marker position={[lastClick.lat, lastClick.lon]} icon={pinIcon}> {/* persistent pin */}
-          <Popup>Location</Popup>
+          <Popup>Your location</Popup>
+        </Marker>
+      )}
+      {startLocation && (
+        <Marker position={[startLocation.lat, startLocation.lon]} icon={pinIcon}>
+          <Popup>Start</Popup>
+        </Marker>
+      )}
+      {destination && (
+        <Marker position={[destination.lat, destination.lon]} icon={pinIcon}>
+          <Popup>Destination</Popup>
+        </Marker>
+      )}
+
+      {/* show routes */}
+      {routes.map((route, idx) => {
+        const coords: [number, number][] = route.geometry.coordinates.map(
+          ([lon, lat]: [number, number]) => [lat, lon]
+        );
+        const colors = ["#3b82f6", "#10b981", "#f59e0b"];
+        return (
+          <Polyline key={idx} positions={coords} pathOptions={{ color: colors[idx] || "#888", weight: 5 }} />
+        );
+      })}
+
+      {userLocation && (
+        <Marker position={userLocation} icon={pinIcon}>
+          <Popup>Your location</Popup>
         </Marker>
       )}
 

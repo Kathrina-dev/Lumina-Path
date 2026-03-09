@@ -1,9 +1,15 @@
 interface RouteInfoPanelProps {
   crowdScore?: number;
   lightingScore?: number;
+  routeScore?: {
+    distance?: number;
+    crowdScore?: number;
+    lightingScore?: number;
+    overallScore?: number;
+  } | null;
 }
 
-export default function RouteInfoPanel({ crowdScore, lightingScore }: RouteInfoPanelProps) {
+export default function RouteInfoPanel({ crowdScore, lightingScore, routeScore }: RouteInfoPanelProps) {
 
   // Debug logs
   console.log("RouteInfoPanel props:", {
@@ -39,9 +45,30 @@ export default function RouteInfoPanel({ crowdScore, lightingScore }: RouteInfoP
   const crowd = getRating(crowdScore);
 
   const stats = [
-    { label: "Distance", value: "--", unit: "km", color: "#FF6BA8" },
-    { label: "Est. Time", value: "--", unit: "min", color: "#c084fc" },
-    { label: "Safety", value: "--", unit: "/10", color: "#FF1A6C" },
+    {
+      label: "Distance",
+      value: routeScore?.distance !== undefined ? (routeScore.distance / 1000).toFixed(2) : "--",
+      unit: "km",
+      color: "#FF6BA8",
+    },
+    {
+      label: "Est. Time",
+      value:
+        routeScore?.distance !== undefined
+          ? Math.round((routeScore.distance / 1000) * 12).toString()
+          : "--",
+      unit: "min",
+      color: "#c084fc",
+    },
+    {
+      label: "Safety",
+      value:
+        routeScore?.overallScore !== undefined
+          ? routeScore.overallScore.toFixed(1)
+          : "--",
+      unit: "/10",
+      color: "#FF1A6C",
+    },
     { label: "Lighting", value: lighting.label, unit: "", color: lighting.color },
     { label: "Crowd", value: crowd.label, unit: "", color: crowd.color },
   ];

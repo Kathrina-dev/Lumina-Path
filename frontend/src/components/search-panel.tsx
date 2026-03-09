@@ -1,104 +1,315 @@
-export default function SearchPanel() {
-  return (
-    <div style={{
-      width: "290px",
-      maxWidth: "100%",
-      fontFamily: "'Nunito', 'Helvetica Neue', sans-serif",
-      display: "flex",
-      flexDirection: "column",
-      gap: "10px",
-      boxSizing: "border-box",
-    }}>
-      {/* Hero gradient card */}
-      <div style={{
-        background: "linear-gradient(145deg, #FF6BA8 0%, #FF1A6C 100%)",
-        borderRadius: "24px",
-        padding: "20px 20px 18px",
-        boxShadow: "0 8px 30px rgba(255,26,108,0.35)",
-        position: "relative",
-        overflow: "hidden",
-        boxSizing: "border-box",
-      }}>
-        {/* Decorative blobs */}
-        <div style={{ position: "absolute", top: "-30px", right: "-30px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.1)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", bottom: "-20px", right: "20px", width: "80px", height: "80px", borderRadius: "50%", background: "rgba(255,255,255,0.07)", pointerEvents: "none" }} />
+"use client";
 
-        <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.8)", fontWeight: "700", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "4px" }}>
+import { useState, useEffect } from "react";
+import { geocode, suggest, reverseGeocode, Suggestion } from "../utils/route";
+
+interface SearchPanelProps {
+  userLocation?: { lat: number; lon: number } | null;
+  onSearch: (dest: { lat: number; lon: number }) => void;
+}
+
+export default function SearchPanel({ userLocation, onSearch }: SearchPanelProps) {
+  const [dest, setDest] = useState("");
+  const [startAddress, setStartAddress] = useState("Acquiring location...");
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [lastQuery, setLastQuery] = useState(""); // avoid repeating same geocode call
+
+  const handleSearch = async () => {
+    if (loading) return;            // already fetching
+    if (!dest || dest === lastQuery) return; // nothing new
+
+    setLoading(true);
+    try {
+      const location = await geocode(dest);
+      if (location) {
+        onSearch(location);
+        setLastQuery(dest);
+      }
+    } catch (err) {
+      console.error("geocode error", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ---------------- Reverse Geocode ---------------- */
+
+  useEffect(() => {
+    if (!userLocation) return;
+
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      try {
+        const data = await reverseGeocode(userLocation.lat, userLocation.lon);
+
+        if (cancelled) return;
+
+        const short =
+          data?.address?.road ||
+          data?.address?.suburb ||
+          data?.address?.city ||
+          data?.address?.town ||
+          data?.display_name;
+
+        setStartAddress(short || "Current location");
+      } catch {
+        setStartAddress("Current location");
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [userLocation]);
+
+  /* ---------------- Autocomplete ---------------- */
+
+  useEffect(() => {
+    if (dest.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const debounce = setTimeout(async () => {
+      try {
+        setLoading(true);
+
+        const results = await suggest(dest, 5, controller.signal);
+
+        if (!Array.isArray(results)) {
+          setSuggestions([]);
+        } else {
+          setSuggestions(results);
+        }
+
+        setActiveIndex(-1);
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === "AbortError")) {
+          console.error("suggest error", err);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }, 450);
+
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+    };
+  }, [dest]);
+
+  /* ---------------- Selection ---------------- */
+
+  const selectSuggestion = (s: Suggestion) => {
+    setDest(s.display_name);
+    setSuggestions([]);
+
+    onSearch({
+      lat: parseFloat(s.lat),
+      lon: parseFloat(s.lon),
+    });
+  };
+
+  /* ---------------- Keyboard Navigation ---------------- */
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!suggestions.length) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => (i + 1) % suggestions.length);
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+    }
+
+    if (e.key === "Enter") {
+      if (activeIndex >= 0) {
+        selectSuggestion(suggestions[activeIndex]);
+      } else {
+        handleSearch();
+      }
+    }
+  };
+
+  /* ---------------- UI ---------------- */
+
+  return (
+    <div
+      style={{
+        width: "290px",
+        maxWidth: "100%",
+        fontFamily: "'Nunito','Helvetica Neue',sans-serif",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+      }}
+    >
+      {/* CARD */}
+      <div
+        style={{
+          background: "linear-gradient(145deg,#FF6BA8,#FF1A6C)",
+          borderRadius: "24px",
+          padding: "20px",
+          boxShadow: "0 8px 30px rgba(255,26,108,0.35)",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "0.7rem",
+            color: "rgba(255,255,255,0.8)",
+            fontWeight: "700",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
           Safe Route Planner
         </div>
-        <div style={{ fontSize: "1.9rem", fontWeight: "900", color: "white", lineHeight: 1.1, letterSpacing: "-0.03em", marginBottom: "16px" }}>
+
+        <div
+          style={{
+            fontSize: "1.9rem",
+            fontWeight: "900",
+            color: "white",
+            marginBottom: "16px",
+          }}
+        >
           Where to?
         </div>
 
-        {/* Start */}
-        <div style={{ position: "relative", marginBottom: "8px" }}>
-          <div style={{
-            position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)",
-            width: "8px", height: "8px", borderRadius: "50%",
-            background: "#4ade80", boxShadow: "0 0 0 2px rgba(255,255,255,0.6)",
-          }} />
-          <input
-            type="text"
-            placeholder="Start location"
-            style={{
-              width: "100%", padding: "11px 12px 11px 30px",
-              border: "none", borderRadius: "14px",
-              background: "rgba(255,255,255,0.22)",
-              color: "white", fontSize: "0.85rem", fontWeight: "600",
-              outline: "none", boxSizing: "border-box", fontFamily: "inherit",
-              transition: "background 0.15s",
-            }}
-            onFocus={(e) => e.target.style.background = "rgba(255,255,255,0.32)"}
-            onBlur={(e) => e.target.style.background = "rgba(255,255,255,0.22)"}
-          />
-        </div>
+        {/* START */}
+        <input
+          value={startAddress}
+          disabled
+          style={{
+            width: "100%",
+            padding: "11px",
+            borderRadius: "14px",
+            border: "none",
+            marginBottom: "8px",
+            background: "rgba(255,255,255,0.22)",
+            color: "white",
+            fontWeight: "600",
+          }}
+        />
 
-        {/* Destination */}
+        {/* DESTINATION */}
         <div style={{ position: "relative" }}>
-          <div style={{
-            position: "absolute", left: "13px", top: "50%",
-            width: "8px", height: "8px",
-            background: "white",
-            transform: "translateY(-50%) rotate(45deg)",
-            boxShadow: "0 0 0 2px rgba(255,255,255,0.35)",
-          }} />
           <input
-            type="text"
-            placeholder="Destination"
+            placeholder="Search destination"
+            value={dest}
+            onChange={(e) => setDest(e.target.value)}
+            onKeyDown={handleKeyDown}
             style={{
-              width: "100%", padding: "11px 12px 11px 30px",
-              border: "none", borderRadius: "14px",
+              width: "100%",
+              padding: "11px",
+              borderRadius: "14px",
+              border: "none",
               background: "rgba(255,255,255,0.22)",
-              color: "white", fontSize: "0.85rem", fontWeight: "600",
-              outline: "none", boxSizing: "border-box", fontFamily: "inherit",
-              transition: "background 0.15s",
+              color: "white",
+              fontWeight: "600",
             }}
-            onFocus={(e) => e.target.style.background = "rgba(255,255,255,0.32)"}
-            onBlur={(e) => e.target.style.background = "rgba(255,255,255,0.22)"}
           />
+
+          {/* LOADING */}
+          {loading && (
+            <div
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "11px",
+                fontSize: "0.7rem",
+                color: "white",
+              }}
+            >
+              ...
+            </div>
+          )}
+
+          {/* SUGGESTIONS */}
+          {suggestions.length > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                top: "45px",
+                width: "100%",
+                background: "white",
+                borderRadius: "14px",
+                boxShadow: "0 10px 28px rgba(0,0,0,0.18)",
+                zIndex: 100,
+                maxHeight: "220px",
+                overflowY: "auto",
+              }}
+            >
+              {suggestions.map((s, i) => {
+                const parts = s.display_name.split(",");
+
+                return (
+                  <div
+                    key={i}
+                    onClick={() => selectSuggestion(s)}
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      padding: "10px 12px",
+                      cursor: "pointer",
+                      background: activeIndex === i ? "#f3f3f3" : "white",
+                      borderBottom: "1px solid #f1f1f1",
+                    }}
+                  >
+                    <div style={{ fontSize: "14px" }}>📍</div>
+
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                          color: "#333",
+                        }}
+                      >
+                        {parts[0]}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "0.72rem",
+                          color: "#888",
+                        }}
+                      >
+                        {parts.slice(1).join(",")}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Pill CTA */}
+      {/* BUTTON */}
       <button
+        onClick={handleSearch}
         style={{
-          width: "100%", padding: "13px",
-          background: "white", color: "#FF1A6C",
-          border: "2px solid rgba(255,26,108,0.2)",
+          width: "100%",
+          padding: "13px",
+          background: "white",
+          color: "#FF1A6C",
           borderRadius: "50px",
-          fontSize: "0.88rem", fontWeight: "800",
+          fontWeight: "800",
+          border: "2px solid rgba(255,26,108,0.2)",
           cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-          boxShadow: "0 4px 16px rgba(255,26,108,0.15)",
-          fontFamily: "inherit", letterSpacing: "0.01em",
-          transition: "all 0.15s", boxSizing: "border-box",
         }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#FF1A6C"; (e.currentTarget as HTMLButtonElement).style.color = "white"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "white"; (e.currentTarget as HTMLButtonElement).style.color = "#FF1A6C"; }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="currentColor"/>
-        </svg>
         Find Safe Route
       </button>
     </div>
