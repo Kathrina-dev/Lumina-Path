@@ -5,6 +5,7 @@ const CONTACTS = [
   { name: "Mom",    initial: "M" },
   { name: "Sister", initial: "S" },
   { name: "Friend", initial: "F" },
+  { name: "Emergency Services", initial: "E" },
 ];
 
 export default function SOSBlock() {

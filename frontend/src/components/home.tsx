@@ -11,10 +11,11 @@ import SafetyReportBlock from "./safety-report";
 
 const MapView = dynamic(() => import("./map-view"), { ssr: false });
 
-type TabKey = "search" | "route" | "layers" | "info" | "sos" | "report";
+type TabKey = "search" | "route" | "info" | "sos" | "report";
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [fitToken, setFitToken] = useState(0);
 
   // routing-related state
   const [userLocation, setUserLocation] = useState<{lat:number;lon:number} | null>(null);
@@ -92,6 +93,9 @@ export default function Home() {
         fetchingRoute.current = false;
         setShowAllRoutes(true);
         setPendingDestination(null);
+        // collapse the panel and trigger a fitBounds
+        setSheetOpen(false);
+        setFitToken((t) => t + 1);
       });
   }, [userLocation, pendingDestination, fetchSafeRoute]);
 
@@ -156,10 +160,6 @@ export default function Home() {
     {
       key: "route", label: "Prefer",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg>,
-    },
-    {
-      key: "layers", label: "Layers",
-      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
     },
     {
       key: "info", label: "Info",
@@ -335,6 +335,7 @@ export default function Home() {
               ? allRoutes
               : allRoutes.filter((r) => r.type === routePref)
           }
+          fitTrigger={fitToken}
         />
       </div>
 
@@ -466,18 +467,14 @@ export default function Home() {
             onChange={(key) => {
               setRoutePref(key);
               setShowAllRoutes(false);
+              setFitToken((t) => t + 1); // refit whenever preference changes
             }}
           />
-          <LayerToggle initialState={activeLayers} onChange={setActiveLayers} />
           <RouteInfoPanel
-            crowdScore={latestScores.crowdScore}
-            lightingScore={latestScores.lightingScore}
-            routeScore={
+            routes={
               showAllRoutes
-                ? undefined
-                : routeScores[
-                    allRoutes.findIndex((r) => r.type === routePref)
-                  ]
+                ? allRoutes.filter((r) => r.type === "safest")
+                : allRoutes.filter((r) => r.type === routePref)
             }
           />
           {/* Divider */}
@@ -519,8 +516,15 @@ export default function Home() {
               }}
             />
           )}
-          {activeTab === "layers" && <LayerToggle />}
-          {activeTab === "info"   && <RouteInfoPanel />}
+          {activeTab === "info"   && (
+            <RouteInfoPanel
+              routes={
+                showAllRoutes
+                  ? allRoutes.filter((r) => r.type === "safest")
+                  : allRoutes.filter((r) => r.type === routePref)
+              }
+            />
+          )}
           {activeTab === "sos"    && <SOSBlock />}
           {activeTab === "report" && <SafetyReportBlock />}
         </div>

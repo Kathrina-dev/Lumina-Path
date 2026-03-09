@@ -1,99 +1,121 @@
+"use client";
+
 interface RouteInfoPanelProps {
-  crowdScore?: number;
-  lightingScore?: number;
-  routeScore?: {
-    distance?: number;
-    crowdScore?: number;
-    lightingScore?: number;
-    overallScore?: number;
-  } | null;
+  routes?: Array<{
+    type?: string; // "fastest" | "safest" | "balanced"
+    distance?: number; 
+    safety?: {
+      distance?: number;
+      crowdScore?: number;
+      lightingScore?: number;
+      overallScore?: number;
+      detailedScores?: Array<{
+        lighting?: number;
+        crowd?: number;
+      }>;
+    };
+  }>;
+  selectedRouteType?: string; // controlled by RouteControls
 }
 
-export default function RouteInfoPanel({ crowdScore, lightingScore, routeScore }: RouteInfoPanelProps) {
+export default function RouteInfoPanel({
+  routes,
+  selectedRouteType,
+}: RouteInfoPanelProps) {
+  if (!routes || routes.length === 0) return null;
 
-  // Debug logs
-  console.log("RouteInfoPanel props:", {
-    crowdScore,
-    lightingScore,
-    crowdType: typeof crowdScore,
-    lightingType: typeof lightingScore
-  });
-
-  console.log("RouteInfoPanel debug:", {
-    crowdScore,
-    lightingScore,
-    crowdUndefined: crowdScore === undefined,
-    lightingUndefined: lightingScore === undefined,
-  });
-
-  // Convert numeric score → label + color
+  // rating helper
   function getRating(score?: number) {
     if (score === undefined) return { label: "--", color: "#aaa" };
-
-    if (score <= 3) {
-      return { label: "Poor", color: "#ef4444" };
-    }
-
-    if (score <= 7) {
-      return { label: "Moderate", color: "#f59e0b" };
-    }
-
+    if (score <= 3) return { label: "Poor", color: "#ef4444" };
+    if (score <= 7) return { label: "Moderate", color: "#f59e0b" };
     return { label: "Good", color: "#22c55e" };
   }
 
-  const lighting = getRating(lightingScore);
-  const crowd = getRating(crowdScore);
+  // find route to display
+  let routeToShow =
+    routes.find((r) => r.type === selectedRouteType) ||
+    routes.find((r) => r.type === "safest") ||
+    routes[0];
+
+  if (!routeToShow) return null;
+
+  const rs = routeToShow.safety || {};
+  const dist = rs.distance ?? routeToShow.distance;
+
+  // derive crowd / lighting if missing
+  let lightingVal: number | undefined = rs.lightingScore;
+  let crowdVal: number | undefined = rs.crowdScore;
+
+  if (
+    (lightingVal === undefined || crowdVal === undefined) &&
+    Array.isArray(rs.detailedScores)
+  ) {
+    const scores = rs.detailedScores;
+
+    if (lightingVal === undefined) {
+      const sum = scores.reduce((s, d) => s + (d.lighting ?? 0), 0);
+      lightingVal = sum / scores.length;
+    }
+
+    if (crowdVal === undefined) {
+      const sum = scores.reduce((s, d) => s + (d.crowd ?? 0), 0);
+      crowdVal = sum / scores.length;
+    }
+  }
+
+  const lighting = getRating(lightingVal);
+  const crowd = getRating(crowdVal);
 
   const stats = [
     {
       label: "Distance",
-      value: routeScore?.distance !== undefined ? (routeScore.distance / 1000).toFixed(2) : "--",
+      value: dist !== undefined ? (dist / 1000).toFixed(2) : "--",
       unit: "km",
       color: "#FF6BA8",
     },
     {
       label: "Est. Time",
-      value:
-        routeScore?.distance !== undefined
-          ? Math.round((routeScore.distance / 1000) * 12).toString()
-          : "--",
+      value: dist !== undefined ? Math.round((dist / 1000) * 12).toString() : "--",
       unit: "min",
       color: "#c084fc",
     },
     {
       label: "Safety",
-      value:
-        routeScore?.overallScore !== undefined
-          ? routeScore.overallScore.toFixed(1)
-          : "--",
+      value: rs.overallScore !== undefined ? rs.overallScore.toFixed(1) : "--",
       unit: "/10",
       color: "#FF1A6C",
     },
-    { label: "Lighting", value: lighting.label, unit: "", color: lighting.color },
-    { label: "Crowd", value: crowd.label, unit: "", color: crowd.color },
+    {
+      label: "Lighting",
+      value: lighting.label,
+      unit: "",
+      color: lighting.color,
+    },
+    {
+      label: "Crowd",
+      value: crowd.label,
+      unit: "",
+      color: crowd.color,
+    },
   ];
 
   return (
     <div
       style={{
         fontFamily: "'Nunito', 'Helvetica Neue', sans-serif",
-        display: "flex",
-        flexDirection: "column",
-        gap: "8px",
         width: "100%",
-        boxSizing: "border-box",
       }}
     >
-      {/* Stats card */}
       <div
         style={{
           background: "white",
           borderRadius: "20px",
-          padding: "14px 14px",
+          padding: "14px",
           boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
-          boxSizing: "border-box",
         }}
       >
+        {/* Header */}
         <div
           style={{
             fontSize: "0.62rem",
@@ -107,12 +129,29 @@ export default function RouteInfoPanel({ crowdScore, lightingScore, routeScore }
           Route Info
         </div>
 
-        {/* Debug display (temporary) */}
-        <div style={{ color: "red", fontWeight: 800, fontSize: "0.7rem", marginBottom: "6px" }}>
-          Lighting Debug: {lightingScore} | Crowd Debug: {crowdScore}
-        </div>
+        {/* Route Type */}
+        {routeToShow.type && (
+          <div
+            style={{
+              fontSize: "0.75rem",
+              fontWeight: "700",
+              marginBottom: "8px",
+              textTransform: "capitalize",
+              color: "#333",
+            }}
+          >
+            {routeToShow.type}
+          </div>
+        )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "7px" }}>
+        {/* Stats Grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "7px",
+          }}
+        >
           {stats.map((s) => (
             <div
               key={s.label}
@@ -121,7 +160,6 @@ export default function RouteInfoPanel({ crowdScore, lightingScore, routeScore }
                 padding: "11px 11px 9px",
                 background: `${s.color}14`,
                 border: `1.5px solid ${s.color}30`,
-                boxSizing: "border-box",
               }}
             >
               <div
@@ -152,7 +190,13 @@ export default function RouteInfoPanel({ crowdScore, lightingScore, routeScore }
                 </span>
 
                 {s.unit && (
-                  <span style={{ fontSize: "0.62rem", color: "#aaa", fontWeight: "700" }}>
+                  <span
+                    style={{
+                      fontSize: "0.62rem",
+                      color: "#aaa",
+                      fontWeight: "700",
+                    }}
+                  >
                     {s.unit}
                   </span>
                 )}
