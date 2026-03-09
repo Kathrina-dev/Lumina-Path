@@ -2,9 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 require('dotenv').config();
+const cors = require('cors');
+const connectDB = require("./config/db");
 
-app.use(cors({ origin: 'http://localhost:3000' }));
-
+connectDB();
 // Middleware
 app.use(express.json());
 app.use(cors());
@@ -16,7 +17,7 @@ const lightingRoutes = require("./routes/lighting");
 const reportsRoutes = require("./routes/reports");
 const safePlacesRoutes = require("./routes/Safeplaces");
 
-const PORT = 5000;
+const PORT = process.env.PORT || 3000;
 
 // Health check
 app.get('/', (req, res) => {
