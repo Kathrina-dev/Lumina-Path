@@ -11,43 +11,43 @@ const OSRM_URL = "http://router.project-osrm.org/route/v1/walking";
  * @param {number} endLon - End longitude
  * @returns {Array} Array of route objects with geometry
  */
+
 async function getRoutes(startLat, startLon, endLat, endLon) {
 
   const routes = [];
 
-  // ORIGINAL ROUTE
-  const main = await fetchRoute(startLat, startLon, endLat, endLon);
-  routes.push(...main);
+  // normal route
+  const r1 = await fetchRoute(startLat, startLon, endLat, endLon);
+  routes.push(...r1);
 
-  // If OSRM gives less than 3 routes, create extra candidates
-  if (routes.length < 3) {
+  // shift north
+  const r2 = await fetchRoute(
+    startLat + 0.003,
+    startLon,
+    endLat,
+    endLon
+  );
+  routes.push(...r2);
 
-    const shiftedStart = await fetchRoute(
-      startLat + 0.002,
-      startLon,
-      endLat,
-      endLon
-    );
+  // shift east
+  const r3 = await fetchRoute(
+    startLat,
+    startLon + 0.003,
+    endLat,
+    endLon
+  );
+  routes.push(...r3);
 
-    routes.push(...shiftedStart);
-  }
+  // shift destination south
+  const r4 = await fetchRoute(
+    startLat,
+    startLon,
+    endLat - 0.003,
+    endLon
+  );
+  routes.push(...r4);
 
-  if (routes.length < 3) {
-
-    const shiftedEnd = await fetchRoute(
-      startLat,
-      startLon,
-      endLat + 0.002,
-      endLon
-    );
-
-    routes.push(...shiftedEnd);
-  }
-
-  // Remove duplicates
-  const uniqueRoutes = routes.slice(0, 3);
-
-  return uniqueRoutes;
+  return routes.slice(0, 3);
 }
 
 async function fetchRoute(startLat, startLon, endLat, endLon) {
