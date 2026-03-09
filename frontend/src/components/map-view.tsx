@@ -9,8 +9,10 @@ import {
   Popup,
   useMapEvents,
   Polyline,
+  CircleMarker,
+  useMap
 } from "react-leaflet";
-import L, { LatLngExpression } from "leaflet";
+import L, { LatLngExpression, LeafletMouseEvent } from "leaflet";
 import { MapPin } from "lucide-react";
 import ReactDOMServer from "react-dom/server";
 
@@ -24,7 +26,8 @@ const pinIcon = L.divIcon({
   popupAnchor: [0, -28],
 });
 
-const position: LatLngExpression = [20.2376, 84.27];
+const defaultPosition: LatLngExpression = [20.2376, 84.27];
+const routeColors = ["#2979FF", "#00C853", "#FF6D00"];
 
 interface PointInfo {
   lat: number;
@@ -35,20 +38,28 @@ interface PointInfo {
 
 interface MapViewProps {
   activeLayers: Record<string, boolean>;
-  /** invoked when new crowd/lighting data is fetched */
   onScores?: (scores: { crowdScore?: number; lightingScore?: number }) => void;
-  /** notified when geolocation is obtained */
   onLocation?: (loc: { lat: number; lon: number }) => void;
   startLocation?: { lat: number; lon: number } | null;
   destination?: { lat: number; lon: number } | null;
   routes?: Array<any>;
 }
 
-export default function MapView({ activeLayers, onScores, onLocation, startLocation, destination, routes = [] }: MapViewProps) {
+export default function MapView({
+  activeLayers,
+  onScores,
+  onLocation,
+  startLocation,
+  destination,
+  routes = [],
+}: MapViewProps) {
   const [mounted, setMounted] = useState(false);
   const [points, setPoints] = useState<PointInfo[]>([]);
   const [lastClick, setLastClick] = useState<{ lat: number; lon: number } | null>(null);
   const [userLocation, setUserLocation] = useState<LatLngExpression | null>(null);
+  const coords: [number, number][] = convertToLatLng(route.geometry.coordinates);
+  const offset = i * 0.00005;
+  const offsetCoords = coords.map(([lat, lng]) => [lat + offset, lng + offset] as [number, number]);
 
   useEffect(() => {
     setMounted(true);
@@ -66,10 +77,9 @@ export default function MapView({ activeLayers, onScores, onLocation, startLocat
     }
   }, [onLocation]);
 
-  // helper to fetch scores for a clicked location
   const fetchScores = async (lat: number, lon: number) => {
     setLastClick({ lat, lon });
-    const base = process.env.NEXT_PUBLIC_BACKEND_URL || ""; // allow proxy
+    const base = process.env.NEXT_PUBLIC_BACKEND_URL || "";
     const newPoint: PointInfo = { lat, lon };
 
     if (activeLayers.crowd) {
@@ -102,9 +112,36 @@ export default function MapView({ activeLayers, onScores, onLocation, startLocat
     }
   };
 
+  function convertToLatLng(coords: number[][]): [number, number][] {
+    return coords.map(([lng, lat]) => [lat, lng] as [number, number]);
+  }
+
+  function FitBounds({ routes }: { routes: any[] }) {
+    const map = useMap();
+    const [fitted, setFitted] = useState(false);
+
+    useEffect(() => {
+      if (!routes?.length || fitted) return;
+
+      const allCoords: [number, number][] = [];
+      routes.forEach((r) => {
+        if (r?.geometry?.coordinates) {
+          allCoords.push(...r.geometry.coordinates.map(([lng, lat]) => [lat, lng]));
+        }
+      });
+
+      if (allCoords.length) {
+        map.fitBounds(allCoords);
+        setFitted(true); // only fit once
+      }
+    }, [routes, map, fitted]);
+
+    return null;
+  }
+
   function ClickHandler() {
     useMapEvents({
-      click: (e) => {
+      click: (e: LeafletMouseEvent) => {
         const { lat, lng } = e.latlng;
         fetchScores(lat, lng);
       },
@@ -113,23 +150,33 @@ export default function MapView({ activeLayers, onScores, onLocation, startLocat
   }
 
   if (!mounted) return null;
+
   return (
     <MapContainer
-      center={position}
-      zoom={7.3}
-      style={{ height: "100%", width: "100%" }}
-    >
+    center={defaultPosition}
+    zoom={7.3}
+    style={{ height: "100vh", width: "100vw" }}
+    scrollWheelZoom={true}
+    dragging={true}
+    doubleClickZoom={true}
+    touchZoom={true}
+  >
       <TileLayer
         attribution="© OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+
+      <FitBounds routes={routes} />
       <ClickHandler />
 
+      {/* User clicked location */}
       {lastClick && (
-        <Marker position={[lastClick.lat, lastClick.lon]} icon={pinIcon}> {/* persistent pin */}
+        <Marker position={[lastClick.lat, lastClick.lon]} icon={pinIcon}>
           <Popup>Your location</Popup>
         </Marker>
       )}
+
+      {/* Start / destination */}
       {startLocation && (
         <Marker position={[startLocation.lat, startLocation.lon]} icon={pinIcon}>
           <Popup>Start</Popup>
@@ -141,30 +188,64 @@ export default function MapView({ activeLayers, onScores, onLocation, startLocat
         </Marker>
       )}
 
-      {/* show routes */}
-      {routes.map((route, idx) => {
-        const coords: [number, number][] = route.geometry.coordinates.map(
-          ([lon, lat]: [number, number]) => [lat, lon]
-        );
-        const colors = ["#3b82f6", "#10b981", "#f59e0b"];
-        return (
-          <Polyline key={idx} positions={coords} pathOptions={{ color: colors[idx] || "#888", weight: 5 }} />
-        );
-      })}
-
+      {/* User current location */}
       {userLocation && (
         <Marker position={userLocation} icon={pinIcon}>
           <Popup>Your location</Popup>
         </Marker>
       )}
 
+      {/* Routes */}
+      {routes?.map((route: any, i: number) => {
+        if (!route?.geometry?.coordinates) return null;
+
+        // convert coordinates
+        const coords: [number, number][] = convertToLatLng(route.geometry.coordinates);
+
+        // optional: slightly offset overlapping routes for visibility
+        const offset = i * 0.00005; // ~5 meters
+        const offsetCoords = coords.map(([lat, lng]) => [lat + offset, lng + offset] as [number, number]);
+
+        return (
+          <Polyline
+            key={`route-${i}`}
+            positions={offsetCoords}
+            pathOptions={{
+              color: routeColors[i] || "#888",
+              weight: 6,
+              opacity: 0.9,
+            }}
+          />
+        );
+      })}
+
+      {/* Risk zones */}
+      {routes?.map((route: any) =>
+        route?.safety?.riskZones?.map((zone: any, i: number) => {
+          const [lng, lat] = zone.coordinates;
+          return (
+            <CircleMarker
+              key={`risk-${i}`}
+              center={[lat, lng]}
+              radius={8}
+              pathOptions={{
+                color: "#FF1A1A",
+                fillColor: "#FF1A1A",
+                fillOpacity: 0.9,
+              }}
+            />
+          );
+        })
+      )}
+
+      {/* Clicked points */}
       {points.map((p, idx) => {
-        // decide whether to render this marker depending on active layers
         const showCrowd = activeLayers.crowd && p.crowdScore !== undefined;
         const showLight = activeLayers.lighting && p.lightingScore !== undefined;
         if (!showCrowd && !showLight) return null;
+
         return (
-          <Marker key={idx} position={[p.lat, p.lon]} icon={pinIcon}>
+          <Marker key={`point-${idx}`} position={[p.lat, p.lon]} icon={pinIcon}>
             <Popup>
               <div style={{ fontSize: "0.85rem" }}>
                 {showCrowd && <div>Crowd: {p.crowdScore!.toFixed(2)}</div>}
