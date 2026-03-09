@@ -13,7 +13,35 @@ export default function SOSBlock() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [timerRef, setTimerRef] = useState<ReturnType<typeof setInterval> | null>(null);
 
+
   const startSOS = () => {
+    try {
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+
+      const res = await fetch("http://localhost:5000/api/sos/send-alert", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          userId: "user124",
+          latitude,
+          longitude
+        })
+      });
+
+      const data = await res.json();
+      console.log("SOS response:", data);
+
+    });
+
+  } catch (err) {
+    console.error("SOS failed", err);
+  }
     let count = 3;
     setCountdown(count);
     const interval = setInterval(() => {
