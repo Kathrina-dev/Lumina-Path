@@ -127,11 +127,13 @@ async function calculateRouteSafety(route) {
     const optimalCount = getOptimalSampleCount(route.distance);
     // Sample points at consistent distance intervals
     const samples = sampleRoutePoints(route, optimalCount);
+   
 
     console.log(`📍 Analyzing route: ${route.distance}m distance, ${samples.length} samples`);
 
     // Fetch safety data for each sample point in parallel
     const scorePromises = samples.map(async (point) => {
+      console.log(point)
       // Create cache key from coordinates (rounded to 3 decimals = ~100m precision)
       const cacheKey = `${point.lat.toFixed(3)},${point.lon.toFixed(3)}`;
 

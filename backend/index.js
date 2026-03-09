@@ -6,15 +6,20 @@ const connectDB = require("./config/db");
 
 connectDB();
 // Middleware
+require("dotenv").config();
+
+authorization: process.env.FAST2SMS_API_KEY
 app.use(express.json());
 app.use(cors());
 
 // Routes
+connectDB();
 const safeRouteRoutes = require("./routes/safeRoute");
 const crowdRoutes = require("./routes/crowd");
 const lightingRoutes = require("./routes/lighting");
 const reportsRoutes = require("./routes/reports");
 const safePlacesRoutes = require("./routes/Safeplaces");
+const sosRoutes = require("./routes/sos");
 
 const PORT = process.env.PORT || 3000;
 
@@ -33,6 +38,8 @@ app.use("/api/crowd", crowdRoutes);
 app.use("/api/lighting", lightingRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/safe-places", safePlacesRoutes);
+app.use("/api/sos", sosRoutes);
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
