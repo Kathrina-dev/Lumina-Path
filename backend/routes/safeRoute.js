@@ -49,20 +49,28 @@ router.post("/", async (req, res) => {
 
     // Rank routes by safety
     const rankedRoutes = await rankRoutesBySafety(routes);
+    const fastest = routes.reduce((a, b) =>
+      a.duration < b.duration ? a : b
+    );
 
-    // Return safest route and alternatives
+    const safest = rankedRoutes[0];
+
+    const balanced = rankedRoutes.reduce((a, b) => {
+
+      const scoreA = a.safety.overallScore / a.duration;
+      const scoreB = b.safety.overallScore / b.duration;
+
+      return scoreA > scoreB ? a : b;
+    });
+
     res.json({
       success: true,
-      safestRoute: {
-        route: rankedRoutes[0],
-        safety: rankedRoutes[0].safety
+      routes: {
+        fastest,
+        safest,
+        balanced
       },
-      alternativeRoutes: rankedRoutes.slice(1).map(route => ({
-        route,
-        safety: route.safety
-      })),
-      totalRoutesAnalyzed: rankedRoutes.length,
-      timestamp: new Date().toISOString()
+      totalRoutesAnalyzed: rankedRoutes.length
     });
 
   } catch (error) {
