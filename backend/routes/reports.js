@@ -1,9 +1,6 @@
 const express = require("express");
 const router = express.Router();
-
-// Temporary in-memory storage (replace with database)
-let reports = [];
-let reportIdCounter = 1;
+const Report = require("../models/Report");
 
 /**
  * POST /api/reports
@@ -21,12 +18,12 @@ let reportIdCounter = 1;
  */
 router.post("/", async (req, res) => {
   try {
-    const { lat, lon, type, description, severity = 3, userId } = req.body;
+    const { lat, lon, type, severity = 3, userId } = req.body;
 
     // Validation
-    if (!lat || !lon || !type || !description) {
+    if (!lat || !lon || !type ) {
       return res.status(400).json({
-        error: 'Missing required fields: lat, lon, type, description',
+        error: 'Missing required fields: lat, lon, type',
         types: ['dark_street', 'harassment', 'broken_light', 'unsafe_crowd', 'other']
       });
     }
@@ -39,26 +36,19 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: 'Severity must be an integer between 1-5' });
     }
 
-    const report = {
-      id: reportIdCounter++,
+    const report = await Report.create({
       lat: parseFloat(lat),
       lon: parseFloat(lon),
       type,
-      description,
       severity,
-      userId: userId || 'anonymous',
-      timestamp: new Date().toISOString(),
-      votes: 1 // Upvote count
-    };
-
-    reports.push(report);
+      timestamp: new Date()
+    });
 
     res.status(201).json({
       success: true,
-      message: 'Report submitted successfully',
-      report,
-      timestamp: new Date().toISOString()
+      report
     });
+
 
   } catch (error) {
     console.error("Error submitting report:", error);
@@ -79,7 +69,7 @@ router.post("/", async (req, res) => {
  * - type: string (filter by report type, optional)
  * - minSeverity: number (filter by minimum severity, default 1)
  */
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const { lat, lon, radius = 500, type, minSeverity = 1 } = req.query;
 
@@ -96,25 +86,15 @@ router.get("/", (req, res) => {
     const minSev = parseInt(minSeverity);
 
     // Filter reports in the radius
-    const nearbyReports = reports.filter(report => {
-      const distance = calculateDistance(centerLat, centerLon, report.lat, report.lon);
-      
-      let typeMatch = true;
-      if (type) typeMatch = report.type === type;
-
-      let severityMatch = report.severity >= minSev;
-
-      return distance <= searchRadius && typeMatch && severityMatch;
+    const nearbyReports = await Report.find({
+      lat: { $gte: centerLat - 0.002, $lte: centerLat + 0.002 },
+      lon: { $gte: centerLon - 0.002, $lte: centerLon + 0.002 },
+      severity: { $gte: minSev }
     });
 
     // Sort by recency and votes
     nearbyReports.sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime();
-      const timeB = new Date(b.timestamp).getTime();
-      const timeDiff = timeB - timeA; // Newer first
-      
-      if (timeDiff !== 0) return timeDiff;
-      return b.votes - a.votes; // Then by votes
+      return new Date(b.timestamp) - new Date(a.timestamp);
     });
 
     res.json({
@@ -134,65 +114,65 @@ router.get("/", (req, res) => {
   }
 });
 
-/**
- * GET /api/reports/:id
- * Get a specific report
- */
-router.get("/:id", (req, res) => {
-  const report = reports.find(r => r.id === parseInt(req.params.id));
+// /**
+//  * GET /api/reports/:id
+//  * Get a specific report
+//  */
+// router.get("/:id", async (req, res) => {
+//   const report = reports.find(r => r.id === parseInt(req.params.id));
 
-  if (!report) {
-    return res.status(404).json({ error: 'Report not found' });
-  }
+//   if (!report) {
+//     return res.status(404).json({ error: 'Report not found' });
+//   }
 
-  res.json({
-    success: true,
-    report,
-    timestamp: new Date().toISOString()
-  });
-});
+//   res.json({
+//     success: true,
+//     report,
+//     timestamp: new Date().toISOString()
+//   });
+// });
 
-/**
- * POST /api/reports/:id/upvote
- * Upvote a report to increase visibility
- */
-router.post("/:id/upvote", (req, res) => {
-  const report = reports.find(r => r.id === parseInt(req.params.id));
+// /**
+//  * POST /api/reports/:id/upvote
+//  * Upvote a report to increase visibility
+//  */
+// router.post("/:id/upvote", (req, res) => {
+//   const report = reports.find(r => r.id === parseInt(req.params.id));
 
-  if (!report) {
-    return res.status(404).json({ error: 'Report not found' });
-  }
+//   if (!report) {
+//     return res.status(404).json({ error: 'Report not found' });
+//   }
 
-  report.votes++;
+//   report.votes++;
 
-  res.json({
-    success: true,
-    message: 'Report upvoted',
-    report,
-    timestamp: new Date().toISOString()
-  });
-});
+//   res.json({
+//     success: true,
+//     message: 'Report upvoted',
+//     report,
+//     timestamp: new Date().toISOString()
+//   });
+// });
 
-/**
- * DELETE /api/reports/:id
- * Delete a report (admin only in production)
- */
-router.delete("/:id", (req, res) => {
-  const index = reports.findIndex(r => r.id === parseInt(req.params.id));
+// /**
+//  * DELETE /api/reports/:id
+//  * Delete a report (admin only in production)
+//  */
+// router.delete("/:id", (req, res) => {
+//   const index = reports.findIndex(r => r.id === parseInt(req.params.id));
 
-  if (index === -1) {
-    return res.status(404).json({ error: 'Report not found' });
-  }
+//   if (index === -1) {
+//     return res.status(404).json({ error: 'Report not found' });
+//   }
 
-  const deletedReport = reports.splice(index, 1);
+//   const deletedReport = reports.splice(index, 1);
 
-  res.json({
-    success: true,
-    message: 'Report deleted',
-    report: deletedReport[0],
-    timestamp: new Date().toISOString()
-  });
-});
+//   res.json({
+//     success: true,
+//     message: 'Report deleted',
+//     report: deletedReport[0],
+//     timestamp: new Date().toISOString()
+//   });
+// });
 
 /**
  * Calculate distance between two coordinates (Haversine formula)
@@ -217,5 +197,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
   return R * c;
 }
+
+
 
 module.exports = router;

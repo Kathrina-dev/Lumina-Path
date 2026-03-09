@@ -5,6 +5,8 @@ const {
   getCCTVScore 
 } = require("./osmService");
 
+const Report = require("../models/Report");
+
 function getOptimalSampleCount(distance) {
   if (distance < 2000) return 4;
   if (distance < 5000) return 5;
@@ -146,6 +148,17 @@ async function calculateRouteSafety(route) {
         getHistoricalSafetyScore(point.lat, point.lon)
       ]);
 
+      const nearbyReports = await Report.find({
+        lat: { $gte: point.lat - 0.002, $lte: point.lat + 0.002 },
+        lon: { $gte: point.lon - 0.002, $lte: point.lon + 0.002 }
+      });
+
+      let reportPenalty = 0;
+
+      nearbyReports.forEach(r => {
+        reportPenalty += r.severity * 0.2;
+      });
+
       // Crowdsourced reports/foot traffic indicates likely open stores
       const openStores = Math.min(5, crowd * 1.2);
 
@@ -155,7 +168,8 @@ async function calculateRouteSafety(route) {
         (crowd * 0.25) +         // Foot traffic: 25%
         (openStores * 0.20) +    // Open stores/amenities: 20%
         (cctv * 0.10) +          // CCTV: 10%
-        (historical * 0.10);     // Crime/historical data: 10%
+        (historical * 0.10) -     // Crime/historical data: 10%
+        (reportPenalty);          // Report penalty
 
       const result = {
         coordinates: [point.lon, point.lat],
@@ -164,6 +178,7 @@ async function calculateRouteSafety(route) {
         cctv,
         openStores,
         historical,
+        reportCount: nearbyReports.length,
         score: weightedScore
       };
 
@@ -270,6 +285,7 @@ function clearCache() {
   locationCache.clear();
   console.log(`🧹 Cache cleared (${size} entries removed)`);
 }
+
 
 /**
  * Get cache statistics
