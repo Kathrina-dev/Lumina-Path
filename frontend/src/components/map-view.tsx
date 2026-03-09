@@ -8,10 +8,17 @@ function convertToLatLng(coords: number[][]): [number, number][] {
 }
 
 // component responsible for fitting map bounds once when routes are provided
-function FitBounds({ routes }: { routes: any[] }) {
+// receives an optional `trigger` token - when it changes the component
+// will allow the effect to run again even if `routes` didn't change.
+function FitBounds({ routes, trigger }: { routes: any[]; trigger?: number }) {
   const map = useMap();
   const fittedRef = useState(false); // use state to trigger rerender if needed
   const [fitted, setFitted] = fittedRef;
+
+  // reset fitted when trigger changes
+  useEffect(() => {
+    setFitted(false);
+  }, [trigger]);
 
   useEffect(() => {
     if (!routes?.length || fitted) return;
@@ -84,6 +91,7 @@ interface MapViewProps {
   destination?: { lat: number; lon: number } | null;
   // each route may include a `type` field added by Home ("fastest"|"safest"|"balanced")
   routes?: Array<any>;
+  fitTrigger?: number;
 }
 
 export default function MapView({
@@ -93,6 +101,7 @@ export default function MapView({
   startLocation,
   destination,
   routes = [],
+  fitTrigger,
 }: MapViewProps) {
   const [mounted, setMounted] = useState(false);
   const [points, setPoints] = useState<PointInfo[]>([]);
@@ -177,7 +186,7 @@ export default function MapView({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <FitBounds routes={routes} />
+      <FitBounds routes={routes} trigger={fitTrigger} />
       <ClickHandler />
 
       {/* User clicked location */}
