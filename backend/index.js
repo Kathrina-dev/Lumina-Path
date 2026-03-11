@@ -21,7 +21,7 @@ const reportsRoutes = require("./routes/reports");
 const safePlacesRoutes = require("./routes/Safeplaces");
 const sosRoutes = require("./routes/sos");
 
-const PORT = process.env.PORT || 3000;
+const PORT = 5000;
 
 // Health check
 app.get('/', (req, res) => {

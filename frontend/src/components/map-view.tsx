@@ -125,22 +125,6 @@ export default function MapView({
   const [reports, setReports] = useState<{ lat: number; lon: number }[]>([]);
 
   useEffect(() => {
-    const fetchReports = async () => {
-      try {
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-        const res = await fetch(`${base}/api/reports`);
-        const data = await res.json();
-
-        setReports(data);
-      } catch (err) {
-        console.warn("failed to fetch reports", err);
-      }
-    };
-
-    fetchReports();
-  }, []);
-
-  useEffect(() => {
     setMounted(true);
 
     if (navigator.geolocation) {
@@ -309,22 +293,6 @@ export default function MapView({
           </Marker>
         );
       })}
-
-      {/* Reported safety incidents */}
-      {reports.map((r, i) => (
-        <CircleMarker
-          key={`report-${i}`}
-          center={[r.lat, r.lon]}
-          radius={10}
-          pathOptions={{
-            color: "#FF0000",
-            fillColor: "#FF0000",
-            fillOpacity: 0.8,
-          }}
-        >
-          <Popup>Reported unsafe area</Popup>
-        </CircleMarker>
-      ))}
     </MapContainer>
   );
 }
